@@ -16,7 +16,11 @@ This is intentionally small enough to read, but complete enough to discuss serio
 
 ## Architecture Page
 
-Open the HTML architecture view:
+Open the live HTML architecture view:
+
+- https://dgy-github.github.io/campaign-agent-framework/
+
+Or open the local file:
 
 ```text
 campaign-architecture.html
