@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>campaign · 多 Agent 战役框架架构</title>
+<style>
+:root {
+  --bg: #070a0f;
+  --bg-2: #0d1320;
+  --panel: rgba(18, 25, 38, 0.86);
+  --panel-2: rgba(10, 16, 26, 0.92);
+  --line: rgba(148, 163, 184, 0.18);
+  --text: #e8edf7;
+  --muted: #91a0b8;
+  --blue: #4ea1ff;
+  --cyan: #38d5ff;
+  --green: #58e39b;
+  --amber: #ffbd5a;
+  --red: #ff6b6b;
+  --violet: #b795ff;
+  --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.72;
+  background:
+    radial-gradient(circle at 15% 5%, rgba(78,161,255,0.28), transparent 28rem),
+    radial-gradient(circle at 86% 18%, rgba(88,227,155,0.18), transparent 26rem),
+    radial-gradient(circle at 40% 90%, rgba(183,149,255,0.18), transparent 30rem),
+    linear-gradient(180deg, var(--bg), var(--bg-2) 55%, #05070b);
+}
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--mono); color: #9ee7ff; background: rgba(56,213,255,0.09); padding: 0.08rem 0.34rem; border-radius: 0.35rem; }
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 20px 72px;
+}
+.hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 48px;
+  background:
+    linear-gradient(145deg, rgba(78,161,255,0.18), rgba(88,227,155,0.08) 46%, rgba(7,10,15,0.8)),
+    rgba(10,16,26,0.78);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.42);
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  background:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 34px 34px;
+  transform: rotate(-8deg);
+  mask-image: radial-gradient(circle at 50% 40%, #000, transparent 62%);
+  pointer-events: none;
+}
+.hero > * { position: relative; z-index: 1; }
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  border: 1px solid rgba(88,227,155,0.32);
+  background: rgba(88,227,155,0.08);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+h1 {
+  margin: 18px 0 14px;
+  max-width: 920px;
+  font-size: clamp(42px, 7vw, 82px);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+.hero .lead {
+  max-width: 850px;
+  color: #cbd7ea;
+  font-size: 19px;
+}
+.hero .lead strong { color: #fff; }
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 700;
+  border: 1px solid rgba(78,161,255,0.36);
+  background: rgba(78,161,255,0.16);
+  color: #eaf4ff;
+}
+.button.primary {
+  background: linear-gradient(135deg, var(--blue), var(--green));
+  color: #04101a;
+  border: 0;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 24px 0 32px;
+}
+.stat {
+  border: 1px solid var(--line);
+  background: rgba(18,25,38,0.7);
+  border-radius: 18px;
+  padding: 18px;
+}
+.stat b {
+  display: block;
+  font-family: var(--mono);
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--green);
+}
+.stat span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 36px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(7,10,15,0.76);
+  backdrop-filter: blur(16px);
+}
+.nav a {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 11px;
+  border-radius: 10px;
+}
+.nav a:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  text-decoration: none;
+}
+section {
+  margin: 34px 0;
+  scroll-margin-top: 86px;
+}
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.section-head h2 {
+  margin: 0;
+  font-size: clamp(26px, 4vw, 40px);
+  letter-spacing: -0.04em;
+}
+.section-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+.num {
+  color: var(--blue);
+  font-family: var(--mono);
+  font-weight: 800;
+  margin-right: 8px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  background: var(--panel);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.24);
+}
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 19px;
+}
+.card p { color: var(--muted); margin: 0; }
+.badge {
+  display: inline-flex;
+  color: var(--blue);
+  border: 1px solid rgba(78,161,255,0.28);
+  background: rgba(78,161,255,0.08);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.stack {
+  display: grid;
+  gap: 12px;
+}
+.layer {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(10,16,26,0.72);
+}
+.layer h3 {
+  margin: 0 0 12px;
+  color: var(--cyan);
+  font-size: 17px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.035);
+  color: #dbe7f8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.chip small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.flow {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.step {
+  min-height: 122px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(78,161,255,0.1), rgba(255,255,255,0.02));
+}
+.step b {
+  display: block;
+  color: #fff;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.step span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.lane {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.lane-row {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  border-bottom: 1px solid var(--line);
+}
+.lane-row:last-child { border-bottom: 0; }
+.lane-label {
+  padding: 16px;
+  font-family: var(--mono);
+  color: var(--green);
+  border-right: 1px solid var(--line);
+  background: rgba(88,227,155,0.05);
+}
+.lane-body { padding: 14px; }
+.callout {
+  margin-top: 16px;
+  border: 1px solid rgba(255,189,90,0.28);
+  border-left: 4px solid var(--amber);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: rgba(255,189,90,0.08);
+  color: #f4dfc0;
+}
+.callout.blue {
+  border-color: rgba(78,161,255,0.28);
+  border-left-color: var(--blue);
+  background: rgba(78,161,255,0.08);
+  color: #d8ebff;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 16px;
+  font-size: 14px;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+th {
+  color: var(--cyan);
+  background: rgba(78,161,255,0.08);
+  font-family: var(--mono);
+}
+td:first-child {
+  white-space: nowrap;
+  color: #fff;
+  font-weight: 700;
+}
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.module {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 15px;
+  background: rgba(255,255,255,0.03);
+}
+.module b {
+  display: block;
+  color: var(--cyan);
+  font-family: var(--mono);
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.module span {
+  color: var(--muted);
+  font-size: 13px;
+}
+pre {
+  margin: 16px 0 0;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: #060910;
+  color: #d8e7ff;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.footer {
+  margin-top: 44px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .hero { padding: 32px 24px; }
+  .stats, .grid, .grid.two, .flow, .module-grid { grid-template-columns: 1fr; }
+  .lane-row { grid-template-columns: 1fr; }
+  .lane-label { border-right: 0; border-bottom: 1px solid var(--line); }
+  td:first-child { white-space: normal; }
+}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <span class="eyebrow">campaign · command / runtime / rehearsal</span>
+    <h1>不是 Demo，是一套可运行的多 Agent 战役框架</h1>
+    <p class="lead">
+      <strong>campaign</strong> 把多 Agent 从“几个角色聊天”推进到工程系统：事件溯源做状态底座，Coordinator / Executor / Retriever / Reviewer / Reserve 分工协作，PolicyGate 统一治理，A2A 传输可替换，Eval + Chaos 把上线前演练变成门禁。
+    </p>
+    <div class="hero-actions">
+      <a class="button primary" href="campaign/README.md">查看 campaign README</a>
+      <a class="button" href="docs/multi-agent-framework-v5.md">框架方法论文档</a>
+      <a class="button" href="index.html">返回面试资料包</a>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><b>172</b><span>自动化测试覆盖核心链路</span></div>
+    <div class="stat"><b>A2A</b><span>InProcess + HTTP/JSON-RPC + SSE + Discovery</span></div>
+    <div class="stat"><b>EventLog</b><span>SQLite append-only，run_id 隔离</span></div>
+    <div class="stat"><b>HITL</b><span>input_required / approval / resume 可恢复</span></div>
+  </div>
+
+  <nav class="nav">
+    <a href="#position">定位</a>
+    <a href="#stack">分层架构</a>
+    <a href="#flow">执行链路</a>
+    <a href="#event">事件源</a>
+    <a href="#a2a">A2A</a>
+    <a href="#governance">治理韧性</a>
+    <a href="#memory">记忆检索</a>
+    <a href="#modules">模块地图</a>
+    <a href="#demo">运行验证</a>
+  </nav>
+
+  <section id="position">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">01</span>项目定位</h2>
+        <p>一套可以拿来讲架构、跑 demo、做面试项目背书的 multi-agent reference implementation。</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <span class="badge">What</span>
+        <h3>指挥-运行-演练框架</h3>
+        <p>不是单个 agent，而是一个能把任务拆解、路由、执行、审查、治理、回放、演练串起来的框架骨架。</p>
+      </div>
+      <div class="card">
+        <span class="badge">Why</span>
+        <h3>把 Agent 做成可控系统</h3>
+        <p>多 Agent 最怕失控、不可复盘、成本爆炸和责任不清。campaign 用事件源、治理闸和独立 Reviewer 把这些问题变成工程约束。</p>
+      </div>
+      <div class="card">
+        <span class="badge">Proof</span>
+        <h3>172 测试不是摆设</h3>
+        <p>测试覆盖 A2A、HTTP hardening、SSE、HITL、DAG、预算、RAG、记忆、混沌演练、capstone 集成链路。</p>
+      </div>
+    </div>
+    <div class="callout blue">
+      <strong>面试一句话：</strong>我把多 Agent 拆成“指挥层、运行时、演练层、横切治理层”，状态全部由事件派生，所有外部调用先过 PolicyGate，最后用 Eval/Chaos 做上线门禁。这比“几个 agent 互相 chat”更接近真实工程。
+    </div>
+  </section>
+
+  <section id="stack">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">02</span>分层架构</h2>
+        <p>四层主链路，三条横切能力，保证每个角色知道自己该做什么、不该碰什么。</p>
+      </div>
+    </div>
+    <div class="card stack">
+      <div class="layer">
+        <h3>Intent Layer · 执行令</h3>
+        <div class="chips">
+          <span class="chip">ExecutionOrder<small>objective / constraints / budget</small></span>
+          <span class="chip">Task<small>difficulty / required_skills / acceptance</small></span>
+          <span class="chip">Validator<small>重复 task id 拒绝，输入先收口</small></span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>Runtime Layer · 指挥运行</h3>
+        <div class="chips">
+          <span class="chip">Coordinator<small>拆任务、选路由、发消息</small></span>
+          <span class="chip">Executor<small>执行产物</small></span>
+          <span class="chip">Retriever<small>检索上下文</small></span>
+          <span class="chip">Reviewer<small>独立验收，裁判不下场</small></span>
+          <span class="chip">Reserve<small>小模型预备队 / 降级队列</small></span>
+          <span class="chip">ROI Router<small>置信度 + 成本 + 历史成功率</small></span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>Protocol Layer · A2A 通信</h3>
+        <div class="chips">
+          <span class="chip">Message / Part / AgentCard<small>协议对象</small></span>
+          <span class="chip">InProcessTransport<small>本地路由</small></span>
+          <span class="chip">HTTP JSON-RPC<small>重试、退避、鉴权、幂等</small></span>
+          <span class="chip">SSE Stream<small>status -> result</small></span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>Rehearsal Layer · 演练门禁</h3>
+        <div class="chips">
+          <span class="chip">EvalHarness<small>分数低于阈值禁止上线</small></span>
+          <span class="chip">ChaosDrill<small>随机减员，验证韧性</small></span>
+          <span class="chip">Trainset Export<small>把执行轨迹沉淀成数据飞轮</small></span>
+        </div>
+      </div>
+      <div class="layer">
+        <h3>Cross-Cutting · 横切治理</h3>
+        <div class="chips">
+          <span class="chip">EventLog<small>append-only 状态总线</small></span>
+          <span class="chip">PolicyGate<small>预算 / 出域 / 越权 / 注入扫描</small></span>
+          <span class="chip">Resilience<small>熔断 / 制动 / 检查点 / 动员减员</small></span>
+          <span class="chip">Tracer<small>span / meter / score</small></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">03</span>一次任务怎么跑</h2>
+        <p>从用户目标到最终验收，所有关键点都有事件、有边界、有失败处理。</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flow">
+        <div class="step"><b>1. run.started</b><span>分配 run_id，写入 EventLog，建立本次执行边界。</span></div>
+        <div class="step"><b>2. decompose</b><span>Coordinator 把 ExecutionOrder 拆成可执行 Task。</span></div>
+        <div class="step"><b>3. route</b><span>SkillRegistry + ROI Router 选择最合适 agent。</span></div>
+        <div class="step"><b>4. gate</b><span>PolicyGate 检查预算、权限、数据出域和注入风险。</span></div>
+        <div class="step"><b>5. dispatch</b><span>Task 封装成 Message，经 Transport 送达 worker。</span></div>
+        <div class="step"><b>6. review</b><span>Reviewer 独立验收，写 score 与 done/failed 事件。</span></div>
+      </div>
+      <div class="callout">
+        <strong>关键点：</strong>worker 不被 runtime 直接裸调，而是走 <code>Message.request -> Transport.send -> on_message</code>。这让本地 agent、远程 agent、SSE 流式 agent 可以共享同一套执行语义。
+      </div>
+    </div>
+    <div class="lane">
+      <div class="lane-row">
+        <div class="lane-label">成功路径</div>
+        <div class="lane-body"><code>task.assigned</code> -> <code>executor.output</code> -> <code>review.done(score)</code> -> <code>task.done</code> -> <code>run.completed</code></div>
+      </div>
+      <div class="lane-row">
+        <div class="lane-label">失败路径</div>
+        <div class="lane-body"><code>task.failed</code> 会拉低 health，触发 breaker / brake / mobilization；如果是 HITL，写 <code>input_required</code> 后等待 <code>Runtime.resume()</code>。</div>
+      </div>
+      <div class="lane-row">
+        <div class="lane-label">并发路径</div>
+        <div class="lane-body"><code>set_concurrency(n)</code> 使用 Semaphore + gather；DAG 任务通过 <code>depends_on</code> 拓扑分层，避免依赖未完成就乱跑。</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="event">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">04</span>事件溯源底座</h2>
+        <p>状态不是“存在内存里的当前值”，而是由事件回放派生出来的态势。</p>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="card">
+        <h3>EventLog = append-only 作战日志</h3>
+        <p>SQLite 存储，seq 单调递增，所有 run、task、message、review、brake、governance 事件都只追加不覆盖。这样天然支持审计、回放、跨进程恢复和故障后复盘。</p>
+      </div>
+      <div class="card">
+        <h3>run_id 隔离 = 多战役不串线</h3>
+        <p><code>derive_state(events, run_id)</code> 只折叠当前 run 的事件，多次运行、远程协作、换设备 resume 都不会把任务态混到一起。</p>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>事件</th><th>意义</th></tr></thead>
+        <tbody>
+          <tr><td>run.started / run.completed</td><td>一次执行令的开始与结束，所有后续事件挂到同一个 run_id。</td></tr>
+          <tr><td>task.assigned / task.done / task.failed</td><td>任务生命周期，不靠“猜当前状态”，靠事件回放得出。</td></tr>
+          <tr><td>a2a.message</td><td>A2A 消息审计，记录 from/to/kind/correlation_id。</td></tr>
+          <tr><td>governance.violation</td><td>越权、超预算、敏感出域等治理违规，进入同一条审计总线。</td></tr>
+          <tr><td>brake.signal / mobilization.*</td><td>熔断、协同制动、减员动员，这些韧性动作也可复盘。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="a2a">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">05</span>A2A 协议与远程协作</h2>
+        <p>本地 agent 和远程 agent 共享同一个协议信封，Transport 可替换。</p>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="card">
+        <span class="badge">Protocol</span>
+        <h3>Message / Part / AgentCard</h3>
+        <p><code>Message</code> 管 from/to、run_id、task_id、correlation_id 和 kind；<code>Part</code> 标记 text/data 与 untrusted；<code>AgentCard</code> 用于能力发现。</p>
+      </div>
+      <div class="card">
+        <span class="badge">Transport</span>
+        <h3>InProcess + HTTP + SSE</h3>
+        <p>InProcess 用于本地路由；HTTP JSON-RPC 支持重试、退避、Bearer 鉴权和 message_id 幂等；SSE 用于流式状态事件。</p>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>能力</th><th>实现方式</th></tr></thead>
+        <tbody>
+          <tr><td>远程调用</td><td><code>HttpJsonRpcTransport</code> 把 Message 序列化为 JSON-RPC 2.0，请求失败转成 error Message，不让异常炸穿 runtime。</td></tr>
+          <tr><td>幂等去重</td><td>server 按 message_id 缓存响应，重试不会重复执行 worker。</td></tr>
+          <tr><td>能力发现</td><td><code>agent/cards</code> -> <code>discover()</code> / <code>Runtime.discover_remote()</code> 自动注册远程 agent。</td></tr>
+          <tr><td>分布式 MVP</td><td>节点 A 通过 RemoteAgentProxy 派活给节点 B，共享 SQLite EventLog，统一 derive_state。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>诚实边界：</strong>当前分布式是 MVP：HTTP 传输 + 共享事件库 + 远程代理已经跑通，但预算、health、熔断、mobilizer leader 仍是每进程维度，生产级一致性还需要单独治理。
+      </div>
+    </div>
+  </section>
+
+  <section id="governance">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">06</span>治理、韧性、可观测</h2>
+        <p>多 Agent 真正难的不是“会干活”，而是“失控时能刹住、能解释、能恢复”。</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <span class="badge">Governance</span>
+        <h3>PolicyGate 统一执行闸</h3>
+        <p>预算、数据出域、越权、注入扫描统一过闸。runtime 每个 task 和 LLMClient 每次调用都要经过 gate，而不是只在入口做一次样子。</p>
+      </div>
+      <div class="card">
+        <span class="badge">Resilience</span>
+        <h3>熔断 + 制动 + 动员减员</h3>
+        <p>失败降低 health，breaker 进入 open 状态，brake 做协同背压；mobilizer 根据真实健康信号做三层级减员。</p>
+      </div>
+      <div class="card">
+        <span class="badge">Observability</span>
+        <h3>Tracer span / meter / score</h3>
+        <p>每次 agent 调用、review 分数、token 计量都进入可观测通道，可对接 Langfuse / OpenTelemetry。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="memory">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">07</span>记忆与检索</h2>
+        <p>短期状态、中期会话、长期知识分开，避免把“记忆”做成一个黑盒垃圾桶。</p>
+      </div>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>层级</th><th>组件</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td>短期</td><td><code>ScratchpadMemory</code></td><td>本轮/近期执行用的临时上下文。</td></tr>
+          <tr><td>中期</td><td><code>SessionMemory</code></td><td>按 run_id 读取 EventLog，恢复同一次战役上下文。</td></tr>
+          <tr><td>长期</td><td><code>SqliteKnowledgeStore</code></td><td>TF-IDF RAG 知识库，保留神经 embedding 接口缝。</td></tr>
+          <tr><td>接入</td><td><code>enable_memory()</code> / <code>set_knowledge_store()</code></td><td>opt-in 接入 runtime 主链，不破坏最小可运行路径。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout blue">
+        <strong>安全处理：</strong>检索结果标记 untrusted，敏感内容做本地隔离；外部内容进入 agent 之前先被当作不可信数据，而不是系统指令。
+      </div>
+    </div>
+  </section>
+
+  <section id="modules">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">08</span>模块地图</h2>
+        <p>每个目录对应一个清晰职责，方便讲架构，也方便继续扩展。</p>
+      </div>
+    </div>
+    <div class="module-grid">
+      <div class="module"><b>core/events.py</b><span>EventLog append/replay/subscribe/truncate。</span></div>
+      <div class="module"><b>core/state.py</b><span>derive_state，按 run_id 派生态势。</span></div>
+      <div class="module"><b>core/models.py</b><span>AgentSpec / Task / ExecutionOrder。</span></div>
+      <div class="module"><b>protocol.py</b><span>A2A Message / Part / AgentCard。</span></div>
+      <div class="module"><b>transport.py</b><span>InProcess / HTTP JSON-RPC / SSE / Discovery。</span></div>
+      <div class="module"><b>roles/</b><span>Coordinator / Executor / Retriever / Reviewer / Reserve。</span></div>
+      <div class="module"><b>routing/</b><span>SkillRegistry + ROI Router。</span></div>
+      <div class="module"><b>governance/</b><span>Policy / Governor / PolicyGate。</span></div>
+      <div class="module"><b>resilience/</b><span>Breaker / Checkpoint / Mobilization。</span></div>
+      <div class="module"><b>observability/</b><span>Tracer span / meter / score。</span></div>
+      <div class="module"><b>llm/client.py</b><span>OpenAI compatible chat/embed adapter。</span></div>
+      <div class="module"><b>memory.py</b><span>Scratchpad / Session memory。</span></div>
+      <div class="module"><b>knowledge.py</b><span>SQLite TF-IDF RAG store。</span></div>
+      <div class="module"><b>eval/</b><span>EvalHarness + ChaosDrill。</span></div>
+      <div class="module"><b>app/runtime.py</b><span>装配、run、resume、discover_remote。</span></div>
+      <div class="module"><b>examples/</b><span>demo / capstone / distributed。</span></div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="section-head">
+      <div>
+        <h2><span class="num">09</span>运行与验证</h2>
+        <p>这页不是 PPT，背后有可运行代码和测试集。</p>
+      </div>
+    </div>
+    <div class="card">
+      <pre>cd campaign
+python -m pip install -e ".[dev]"
+python -m pytest -q
+python -m campaign
+python -m campaign.examples.capstone_demo
+python -m campaign.examples.distributed_demo</pre>
+      <div class="callout blue">
+        <strong>演示建议：</strong>先跑最小 demo 证明主链路，再跑 capstone 展示治理、记忆、检索、评测，最后用 distributed_demo 说明 A2A 远程协作和共享事件库。
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    campaign · 多 Agent 战役框架架构 · <a href="index.html">返回首页</a> · <a href="campaign/README.md">README</a> · <a href="docs/SCALING.md">Scaling Notes</a>
+  </footer>
+</main>
+</body>
+</html>
